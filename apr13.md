@@ -1,18 +1,20 @@
-# Apr 13 — Session 1: Streaming Strategies + Batch Job vs For Each
+# Apr 13 — Full Day Notes
 
-## Topics Covered
+## Session 1: Streaming Strategies + Batch Job vs For Each
+
+### Topics Covered
 - Handling very large files (streaming strategies)
 - Splitting large payloads for target systems that can't accept them whole
 - Batch Job vs. For Each — sequential vs. parallel processing
 
-## Problem: Reading Very Large Files
+### Problem: Reading Very Large Files
 **Scenario:** Read a large file (e.g. starting at 2GB, then scaled to 10GB, 20GB in the discussion) from an SFTP location and send it to a target API system.
 
 **Naive fix — just scale vertically (increase vCore):**
 - More vCore = more memory to hold the whole file in memory while processing.
 - **Problem: cost.** Scaling vCore up enough to hold a 10–20GB file in memory gets extremely expensive at production pricing — the instructor frames this as a budget-breaking approach for real businesses ("no one would invest that much money" for this).
 
-### Solution: Streaming Strategies
+#### Solution: Streaming Strategies
 Rather than loading the entire file into memory, use the file/SFTP connector's **Streaming Strategy** setting (under Advanced):
 
 | Strategy | Behavior |
@@ -23,18 +25,18 @@ Rather than loading the entire file into memory, use the file/SFTP connector's *
 - This avoids **Out Of Memory exceptions** when processing files far larger than available memory.
 - Lets you process files of effectively unlimited size without proportionally scaling vCore — you're bounded by buffer/chunk size, not total file size.
 
-## Problem: Target System Payload Limits
+### Problem: Target System Payload Limits
 Even after successfully **reading** a huge file via streaming, the **target system** may only accept small payloads per request (e.g. max 100MB per request), while your flow is holding much larger chunks (e.g. 1GB after streaming).
 
 **Solution: split the data into smaller pieces before sending.** Two component options:
 
-### For Each
+#### For Each
 - Iterates over a collection **sequentially, one record at a time** (default block/batch size = **1**).
 - **Single-threaded** execution — record 1 fully processes, then record 2, then record 3, etc.
 - Good for **small volumes** (e.g. up to low thousands of records) where simplicity matters more than throughput.
 - Example: an array of 5 records with default For Each → the loop executes exactly 5 times (once per record).
 
-### Batch Job
+#### Batch Job
 - Processes records in **parallel**, using a pool of **16 threads by default**.
 - Configurable **block/batch size** (e.g. 100 records per batch) controls how many records each thread-batch handles at once.
 - Has **three stages**:
@@ -43,14 +45,47 @@ Even after successfully **reading** a huge file via streaming, the **target syst
   3. **On Complete** — reports aggregate results only: count of successful records, count of failed records. (No other real use beyond this summary.)
 - Dramatically faster at scale: instructor's example — ~10 lakh (1 million) records processed in **2–3 minutes** via Batch, versus **over an hour** via For Each, due to the 16-way parallelism vs. strictly sequential single-thread execution.
 
-### When to use which
+#### When to use which
 | Volume | Component |
 |---|---|
 | Small (up to ~thousands) | **For Each** — simple, sequential |
 | Large (lakhs / millions) | **Batch Job** — parallel, much faster |
 
-## Key Takeaway
+### Key Takeaway
 > Two related but distinct scaling problems: (1) **reading** huge input — solved with **streaming strategies** (repeatable, buffered); (2) **writing/sending** huge output to a size-constrained target — solved by **chunking with For Each (sequential) or Batch Job (parallel)**, chosen based on volume.
 
-## Interview Note
+### Interview Note
 Both **Batch Job** and **For Each** (and the reasoning for choosing between them) are called out as important, frequently-asked interview topics — along with Circuit Breaker, Fragments, Bitbucket, and Jenkins (flagged as upcoming topics, ~5 days out at time of recording).
+
+
+---
+
+## Session 2: Hands-On Tasks — For Each vs Batch Job
+
+### Topics Covered
+- Two hands-on POC tasks to internalize For Each vs. Batch Job behavior
+
+### Task 1: For Each with a Small Dataset
+1. Build a JSON array of **10 objects**, each with `employeeId`, `employeeName`, `employeeCity`.
+2. Trigger it via Postman into a simple flow: Listener → Logger.
+3. Use **For Each** to iterate over the array and send each record to a (locally deployed) target/demo application.
+4. **Verify:** with the default For Each block size of 1, the loop should execute exactly **10 times** — once per array record. Confirms sequential, one-at-a-time behavior.
+
+### Task 2: Batch Job with a Larger Dataset
+1. Take a file containing **200 records**.
+2. Build a flow using **Batch Job** with a configured **block size of 10**.
+3. Deploy a separate target/demo application to receive the batched requests.
+4. **Verify:** records are sent to the target in **groups matching the block size** (e.g. batches of 10) rather than one at a time or all at once — confirming Batch Job's grouped/parallel delivery behavior, distinct from For Each's strictly one-record-at-a-time approach.
+
+### Purpose of Both Tasks
+> Doing both POCs side-by-side is meant to make the practical difference between **sequential (For Each)** and **parallel, batched (Batch Job)** processing concrete — not just theoretical. This distinction (and being able to justify which to use when) is emphasized as a common interview scenario question.
+
+### Logistics / Remaining Topics
+- Task deadline: end of day.
+- Remaining topics flagged as still pending in the training: **Circuit Breaker** (deeper recap), **Fragments**, **Bitbucket**, **Jenkins** — expected to take about 5 more days to cover.
+- General reminder: theory alone isn't enough — practice hands-on so you can answer **scenario-based** interview questions, not just definitions.
+
+### Rule of Thumb (recap)
+- Need to **read** a huge amount of data from a source → use **streaming**.
+- Need to **push** a huge amount of data to a target system → use **For Each** (small volume) or **Batch Job** (large volume, e.g. millions of records).
+

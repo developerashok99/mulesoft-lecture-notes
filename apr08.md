@@ -1,6 +1,8 @@
-# Apr 08 — Session 1: Queue vs Exchange, Object Store Persistence, Scaling, Interview Structure, DataWeave Operators
+# Apr 08 — Full Day Notes
 
-## Topics Covered
+## Session 1: Queue vs Exchange, Object Store Persistence, Scaling, Interview Structure, DataWeave Operators
+
+### Topics Covered
 - Queue vs. Exchange (1-to-1 vs 1-to-many)
 - Anypoint MQ topics (pub/sub) and the exchange/queue binding model
 - Object Store `persistent` flag explained
@@ -8,7 +10,7 @@
 - How to structure interview answers
 - DataWeave: `map` and `splitBy` operators
 
-## Queue vs. Exchange
+### Queue vs. Exchange
 - **Queue** = one-to-one delivery model.
 - **Exchange** = one-to-many (pub/sub) delivery model.
 - To fan out a message to multiple consumers (one-to-many), use a component like **Scatter-Gather** (or round-robin) on the publishing side.
@@ -16,21 +18,21 @@
 - You create both **Queue** and **Exchange/Topic** in the Anypoint MQ section of Anypoint Platform.
 - An **Exchange** has a **Bind** option — you can bind **N queues to a single exchange**, so a published message fans out to all bound queues.
 
-## Object Store: `Persistent` Checkbox — Full Explanation
+### Object Store: `Persistent` Checkbox — Full Explanation
 Recall: by default, Object Store data lives in the worker's **runtime memory**.
 
 - If the application goes into an **unresponsive** or **undeployed** state (crashes, restarts, redeploys), all non-persistent Object Store data **is lost**.
 - **Checking the "Persistent" checkbox** ensures stored data **survives** these states — it isn't wiped out when the app restarts/redeploys.
 - **Recommendation: always enable Persistent** when using Object Store for anything you don't want to risk losing.
 
-### Why does an application go unresponsive in the first place?
+#### Why does an application go unresponsive in the first place?
 - Root causes include: target system unavailability (causes failures, not necessarily app crash by itself) and — more importantly — **huge load**: either a single very large payload, or a very high volume of concurrent requests.
 - This ties directly to **scaling**:
   - **Vertical scaling (vCore)** — increasing the compute/memory capacity of a single worker (e.g. 0.1 vCore → 0.2 vCore doubles guaranteed memory, e.g. ~500MB → ~600MB+). Use when a *single request* has a large payload.
   - **Horizontal scaling (Worker count)** — adding more workers to handle more concurrent requests. Use when you're getting a *high volume* of requests rather than large individual payloads.
 - If scaling isn't sufficient for the load, the app can exceed its resource guarantees and go into an unresponsive/undeployed state — which is exactly when non-persistent Object Store data would be lost.
 
-## Interview Answer Structure (Process/Deployment Topics)
+### Interview Answer Structure (Process/Deployment Topics)
 Suggested structure the instructor recommends walking an interviewer through, in order:
 1. Overall experience summary
 2. Scaling (vertical vs horizontal, vCore vs Worker)
@@ -39,7 +41,7 @@ Suggested structure the instructor recommends walking an interviewer through, in
 5. API Manager & Auto-Discovery: linking an API (published from Exchange) to Runtime Manager so a deployed app becomes an active, policy-managed API — without this link, the app won't properly register/deploy as a managed API.
 6. Collections/Fragments (flagged as a topic to be covered later in training)
 
-## DataWeave: `map` Operator
+### DataWeave: `map` Operator
 Example walked through — reshaping an array of objects:
 - Input: array of objects with `firstName` / `lastName` fields.
 - Requirement: combine into a single output field (e.g. `name`).
@@ -53,7 +55,7 @@ Example walked through — reshaping an array of objects:
   - `$` refers to the current item inside the `map` lambda (shorthand for the iterator variable).
   - String concatenation uses `++`.
 
-## DataWeave: `splitBy` Operator
+### DataWeave: `splitBy` Operator
 Example: input has a single combined `name` field (e.g. `"Lokesh Karbandi"`), but the target needs only the **first word** as a separate value.
 - Use `splitBy` to split a string into an array based on a delimiter — in this case, splitting on a **space** character.
 - Example:
@@ -62,13 +64,57 @@ Example: input has a single combined `name` field (e.g. `"Lokesh Karbandi"`), bu
   ```
   - Produces an array of words; you then index into it (e.g. `[0]`) to get just the first word.
 
-## Deployment & Cloud Terminology
+### Deployment & Cloud Terminology
 - Applications are deployed to **CloudHub** (MuleSoft's managed cloud runtime) — when asked "where do you deploy your applications?", the correct/expected answer is **"CloudHub"**, not the generic "AWS" or "the cloud" (CloudHub itself runs on top of AWS infrastructure, but the platform-level answer is CloudHub).
 - CloudHub deployments and worker/vCore configuration are managed via **Runtime Manager**.
 
-## Intro to MUnit (continued from Apr 07)
+### Intro to MUnit (continued from Apr 07)
 - Motivation reinforced: testing via Postman repeatedly hits the **real target system**, which is wasteful and risky (e.g. running the same test 1000 times sends 1000 real requests).
 - **MUnit** allows testing a flow's logic **without connecting to real source/target systems**:
   - **Mock** components stop connectors from making real calls.
   - **Set Event** component lets you inject an expected/test payload directly into the flow, simulating what a real trigger would provide.
 - Test suites live under `src/test/munit` in the project (auto-generated via right-click flow → MUnit → **Create Blank Test Suite**).
+
+
+---
+
+## Session 2: Hands-On MUnit Test Suite
+
+### Topics Covered
+- Building a MUnit test suite step by step
+- Mocking connectors correctly (Doc:Name vs Doc:Id)
+- Using Set Event to inject test payloads
+- Running and validating a test (pass/fail, green checkmark)
+
+### Creating a Test Suite
+1. Right-click the flow → **MUnit** → **Create Blank Test Suite**.
+2. This generates a test file under `src/test/munit`.
+
+### Mocking Connectors
+- Identify how many **connectors** (not just components) exist in the flow — e.g. a Listener and a Request (HTTP) connector — each real external touchpoint needs a corresponding **Mock** step in the test.
+- Drag a **Mock** processor for each connector to intercept it during the test run.
+- **Critical config detail — match by `Doc:Name`, not `Doc:Id`:**
+  - `Doc:Name` = the connector's stable, human-assigned display name (e.g. "Salesforce App" or "Listener"). This does **not** change unless you explicitly rename it.
+  - `Doc:Id` = an internal identifier that **regenerates** if you delete and re-drag-drop the same connector into the canvas.
+  - **Always mock using `Doc:Name`** — if you mock by `Doc:Id` and later recreate the connector (even with identical config), the ID changes and the MUnit suite silently breaks/fails to match.
+- Non-connector components (e.g. **Logger**, **Transform Message**) don't need mocking — Logger has no side effect worth mocking, and Transform Message just needs real input data to operate on (supplied via Set Event).
+
+### Supplying Test Data: Set Event
+- Since a mocked flow has no real trigger (no live Listener request), you need to manually inject the payload the flow expects.
+- Drag a **Set Event** component to the start of the test.
+- Configure it with the exact payload the flow is designed to process, including setting the correct **MIME type / metadata** manually (e.g. `application/json`).
+
+### Debugging a Practical Issue: Port Conflict
+- Encountered: "Address already in use" error when running the test.
+- Cause: multiple Mule applications were running simultaneously on the same port.
+- Fix: stop other running apps and/or restart Anypoint Studio, then re-run.
+
+### Running and Validating
+- Run the test suite in debug mode.
+- Step through: Set Event supplies payload → flow reference calls the main flow → mocked connectors return without hitting real systems → Logger prints intermediate payload → Transform Message combines fields as expected.
+- A **green checkmark / passing suite** confirms the flow's internal logic behaves as expected — without ever touching the real source or target systems.
+- Discussion point: distinguishing a **valid pass** (expected outcome matched) from a case that should have been marked as an expected **failure** — i.e., be deliberate about what "success" means for the specific scenario you're testing (happy path vs. expected error path).
+
+### Key Takeaway
+> MUnit tests validate flow logic in isolation by mocking connectors (matched by stable `Doc:Name`) and injecting test data via `Set Event` — enabling repeatable testing without spamming real external systems.
+
