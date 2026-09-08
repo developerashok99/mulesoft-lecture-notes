@@ -3,6 +3,8 @@
 Structured notes generated from a series of live MuleSoft (Anypoint Platform / Mule 4) training sessions recorded in April. Each file covers one full day's lectures (all sessions from that date), in chronological order.
 
 > 📘 Want deeper, example-rich notes with diagrams to actually *learn* each concept (not just review it)? See **[detailed-notes/](detailed-notes/)**.
+>
+> 📄 Want the original raw English transcripts these notes were built from? See **[transcripts/](transcripts/)**.
 
 ## Index
 
